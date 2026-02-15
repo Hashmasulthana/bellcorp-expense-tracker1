@@ -4,16 +4,17 @@ const path = require('path');
 const dbPath = path.join(__dirname, 'database.sqlite');
 const db = new Database(dbPath);
 
-// Create tables if they don't exist
+// USERS TABLE
 db.prepare(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT,
-  email TEXT UNIQUE,
-  password TEXT
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL
 )
 `).run();
 
+// TRANSACTIONS TABLE
 db.prepare(`
 CREATE TABLE IF NOT EXISTS transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

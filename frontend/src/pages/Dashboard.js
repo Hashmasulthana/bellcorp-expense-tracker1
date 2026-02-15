@@ -16,58 +16,94 @@ function Dashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
 
+  /* ================= FETCH ================= */
   const fetchTransactions = async () => {
-    const res = await axios.get(
-      `http://localhost:5000/transactions?page=1`,
-      { headers: { authorization: token } }
-    );
-    setTransactions(res.data);
+    try {
+      const res = await axios.get(
+        "http://localhost:5000/transactions?page=1",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setTransactions(res.data);
+    } catch (error) {
+      console.log("Fetch error:", error);
+    }
   };
 
   useEffect(() => {
-    fetchTransactions();
+    if (!token) {
+      window.location.href = "/";
+    } else {
+      fetchTransactions();
+    }
   }, []);
 
+  /* ================= ADD / UPDATE ================= */
   const handleSubmit = async () => {
     if (!title || !amount || !category || !date) {
       alert("Please fill required fields");
       return;
     }
 
-    if (editId) {
-      await axios.put(
-        `http://localhost:5000/transactions/${editId}`,
-        { title, amount, category, date, notes },
-        { headers: { authorization: token } }
-      );
-      setEditId(null);
-    } else {
-      await axios.post(
-        `http://localhost:5000/transactions`,
-        { title, amount, category, date, notes },
-        { headers: { authorization: token } }
-      );
+    try {
+      if (editId) {
+        await axios.put(
+          `http://localhost:5000/transactions/${editId}`,
+          { title, amount, category, date, notes },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setEditId(null);
+      } else {
+        await axios.post(
+          "http://localhost:5000/transactions",
+          { title, amount, category, date, notes },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+      }
+
+      setTitle("");
+      setAmount("");
+      setCategory("");
+      setDate("");
+      setNotes("");
+
+      fetchTransactions();
+    } catch (error) {
+      console.log("Submit error:", error);
     }
-
-    setTitle("");
-    setAmount("");
-    setCategory("");
-    setDate("");
-    setNotes("");
-
-    fetchTransactions();
   };
 
+  /* ================= DELETE ================= */
   const handleDelete = async (id) => {
     if (window.confirm("Delete this transaction?")) {
-      await axios.delete(
-        `http://localhost:5000/transactions/${id}`,
-        { headers: { authorization: token } }
-      );
-      fetchTransactions();
+      try {
+        await axios.delete(
+          `http://localhost:5000/transactions/${id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        fetchTransactions();
+      } catch (error) {
+        console.log("Delete error:", error);
+      }
     }
   };
 
+  /* ================= EDIT ================= */
   const handleEdit = (t) => {
     setEditId(t.id);
     setTitle(t.title);
@@ -77,6 +113,7 @@ function Dashboard() {
     setNotes(t.notes);
   };
 
+  /* ================= CALCULATIONS ================= */
   const totalExpense = transactions.reduce(
     (sum, t) => sum + parseFloat(t.amount),
     0
@@ -99,6 +136,7 @@ function Dashboard() {
     return matchesSearch && matchesCategory;
   });
 
+  /* ================= LOGOUT ================= */
   const logout = () => {
     localStorage.clear();
     window.location.href = "/";
@@ -121,6 +159,9 @@ function Dashboard() {
 
         <div className="card">
           <h3>Category Breakdown</h3>
+          {Object.keys(categoryTotals).length === 0 && (
+            <p>No data</p>
+          )}
           {Object.keys(categoryTotals).map((cat) => (
             <p key={cat}>
               {cat} : ₹ {categoryTotals[cat]}
