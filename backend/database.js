@@ -1,31 +1,30 @@
-const Database = require('better-sqlite3');
+const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 const dbPath = path.join(__dirname, 'database.sqlite');
-const db = new Database(dbPath);
+const db = new sqlite3.Database(dbPath);
 
-// USERS TABLE
-db.prepare(`
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL
-)
-`).run();
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      email TEXT UNIQUE,
+      password TEXT
+    )
+  `);
 
-// TRANSACTIONS TABLE
-db.prepare(`
-CREATE TABLE IF NOT EXISTS transactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  userId INTEGER,
-  title TEXT,
-  amount REAL,
-  category TEXT,
-  date TEXT,
-  notes TEXT,
-  FOREIGN KEY(userId) REFERENCES users(id)
-)
-`).run();
+  db.run(`
+    CREATE TABLE IF NOT EXISTS transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER,
+      title TEXT,
+      amount REAL,
+      category TEXT,
+      date TEXT,
+      notes TEXT
+    )
+  `);
+});
 
 module.exports = db;
