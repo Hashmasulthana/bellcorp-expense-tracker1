@@ -1,27 +1,53 @@
-require('dotenv').config();
+require("dotenv").config();
 
-const express = require('express');
-const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const db = require('./database');
+const express = require("express");
+const cors = require("cors");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const Database = require("better-sqlite3");
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-const SECRET_KEY = process.env.SECRET_KEY;
+const SECRET_KEY = process.env.SECRET_KEY || "mysecret";
 const PORT = process.env.PORT || 5000;
 
+/* ================= DATABASE ================= */
+
+const db = new Database("database.db");
+
+db.prepare(`
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL
+)
+`).run();
+
+db.prepare(`
+CREATE TABLE IF NOT EXISTS transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  userId INTEGER,
+  title TEXT,
+  amount REAL,
+  category TEXT,
+  date TEXT,
+  notes TEXT
+)
+`).run();
+
 /* ================= REGISTER ================= */
-app.post('/register', async (req, res) => {
+app.post("/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    let { name, email, password } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "All fields required" });
     }
+
+    email = email.trim().toLowerCase();
 
     const existingUser = db
       .prepare("SELECT * FROM users WHERE email = ?")
@@ -46,13 +72,15 @@ app.post('/register', async (req, res) => {
 });
 
 /* ================= LOGIN ================= */
-app.post('/login', async (req, res) => {
+app.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: "All fields required" });
     }
+
+    email = email.trim().toLowerCase();
 
     const user = db
       .prepare("SELECT * FROM users WHERE email = ?")
@@ -92,26 +120,25 @@ function authenticateToken(req, res, next) {
 
   const token = authHeader.split(" ")[1];
 
-  jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: "Invalid Token" });
-    }
+  try {
+    const user = jwt.verify(token, SECRET_KEY);
     req.user = user;
     next();
-  });
+  } catch {
+    return res.status(403).json({ error: "Invalid Token" });
+  }
 }
 
 /* ================= ADD TRANSACTION ================= */
-app.post('/transactions', authenticateToken, (req, res) => {
+app.post("/transactions", authenticateToken, (req, res) => {
   try {
     const { title, amount, category, date, notes } = req.body;
-    const userId = req.user.id;
 
     db.prepare(`
       INSERT INTO transactions 
       (userId, title, amount, category, date, notes)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(userId, title, amount, category, date, notes);
+    `).run(req.user.id, title, amount, category, date, notes);
 
     res.json({ message: "Transaction added" });
 
@@ -122,19 +149,13 @@ app.post('/transactions', authenticateToken, (req, res) => {
 });
 
 /* ================= GET TRANSACTIONS ================= */
-app.get('/transactions', authenticateToken, (req, res) => {
+app.get("/transactions", authenticateToken, (req, res) => {
   try {
-    const userId = req.user.id;
-    const page = parseInt(req.query.page) || 1;
-    const limit = 5;
-    const offset = (page - 1) * limit;
-
     const rows = db.prepare(`
       SELECT * FROM transactions
       WHERE userId = ?
       ORDER BY date DESC
-      LIMIT ? OFFSET ?
-    `).all(userId, limit, offset);
+    `).all(req.user.id);
 
     res.json(rows);
 
@@ -144,37 +165,46 @@ app.get('/transactions', authenticateToken, (req, res) => {
   }
 });
 
-/* ================= DELETE ================= */
-app.delete('/transactions/:id', authenticateToken, (req, res) => {
-  try {
-    db.prepare(
-      "DELETE FROM transactions WHERE id = ?"
-    ).run(req.params.id);
-
-    res.json({ message: "Deleted successfully" });
-
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* ================= UPDATE ================= */
-app.put('/transactions/:id', authenticateToken, (req, res) => {
+/* ================= UPDATE TRANSACTION ================= */
+app.put("/transactions/:id", authenticateToken, (req, res) => {
   try {
     const { title, amount, category, date, notes } = req.body;
 
     db.prepare(`
       UPDATE transactions
-      SET title=?, amount=?, category=?, date=?, notes=?
-      WHERE id=?
-    `).run(title, amount, category, date, notes, req.params.id);
+      SET title = ?, amount = ?, category = ?, date = ?, notes = ?
+      WHERE id = ? AND userId = ?
+    `).run(
+      title,
+      amount,
+      category,
+      date,
+      notes,
+      req.params.id,
+      req.user.id
+    );
 
     res.json({ message: "Updated successfully" });
 
   } catch (error) {
     console.log(error);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Update failed" });
+  }
+});
+
+/* ================= DELETE TRANSACTION ================= */
+app.delete("/transactions/:id", authenticateToken, (req, res) => {
+  try {
+    db.prepare(`
+      DELETE FROM transactions 
+      WHERE id = ? AND userId = ?
+    `).run(req.params.id, req.user.id);
+
+    res.json({ message: "Deleted successfully" });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Delete failed" });
   }
 });
 
